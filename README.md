@@ -13,6 +13,8 @@
   - `POST /jobs` → 신규 채용 정보 등록
   - `PUT /jobs/{id}` → 채용 정보 수정
   - `DELETE /jobs/{id}` → 채용 정보 삭제
+  - 여권 OCR API 프로그램
+  - 등등..
 
 ### 2️⃣ **외부 채용 데이터 자동 연동 (worknet.py)**
 - 외부 채용 공고 API(공고24, Worknet 등)에서 데이터 수집
