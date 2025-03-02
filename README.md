@@ -1,2 +1,21 @@
-# KOREA-ME
-Python REST API &amp; 채용 데이터 자동 연동 시스템
+# 🔥 Python REST API & 채용 데이터 자동 연동 시스템
+
+본 프로젝트는 Python Flask 기반의 **REST API 서버(app13.py)**와 **외부 채용 데이터를 수집 및 가공하는 자동화 프로그램(worknet.py)**으로 구성된 백엔드 시스템입니다.  
+외부 채용 데이터를 자동으로 수집하고 번역한 후, 자사의 DB와 동기화하는 기능을 포함합니다.
+
+## 📌 주요 기능
+
+### 1️⃣ **REST API (app13.py)**
+- Flask 기반의 REST API 서버
+- 사용자 요청을 처리하고, 데이터베이스와 상호 작용
+- 주요 엔드포인트:
+  - `GET /jobs` → 채용 정보 조회
+  - `POST /jobs` → 신규 채용 정보 등록
+  - `PUT /jobs/{id}` → 채용 정보 수정
+  - `DELETE /jobs/{id}` → 채용 정보 삭제
+
+### 2️⃣ **외부 채용 데이터 자동 연동 (worknet.py)**
+- 외부 채용 공고 API(공고24, Worknet 등)에서 데이터 수집
+- Google Translation API를 활용하여 자동 번역
+- 가공된 데이터를 MySQL DB와 연동하여 자동 저장
+- **실행 방식:** 스케줄링(예: 크론 작업)으로 주기적인 데이터 업데이트 가능
