@@ -8,24 +8,6 @@ from google.cloud import vision
 import xml.etree.ElementTree as ET
 from datetime import datetime
 
-ngrok.set_auth_token("2hUa7i9sadOHtW7AxaqpAaFStq2_4ASGwWt5m6nLfs58jFUtJ")
-KEY_FILE = '/content/active-sun-426314-k8-16571de8734e.json'
-credentials = service_account.Credentials.from_service_account_file(
-    KEY_FILE,
-    scopes=["https://www.googleapis.com/auth/cloud-translation"]
-)
-# Cloud Translation API 클라이언트 생성
-service = build('translate', 'v2', credentials=credentials)
-
-worknet_url = "https://www.work24.go.kr/cm/openApi/call/wk/callOpenApiSvcInfo210L01.do"
-worknet_key = "b82c0cb1-2955-47c7-8e45-95277a911cbb"  # 인증키를 입력하세요
-
-db_host = 'database-1.c7aeiasywe40.ap-northeast-2.rds.amazonaws.com'
-db_user = 'admin'
-db_password = '9120ssf3'
-db_name = 'db1'
-db_port= 3306
-
 
 app = Flask(__name__)
 
@@ -50,7 +32,6 @@ def bubble_job_post(user_id, job_id, pay_type, pay_min, pay_max, welfare, duedat
     'always': always,
     'duedate': duedate
     }
-    BUBBLE_KEY = "17451d9face39e057919c9f0a13a694e"
     BUBBLE_HEADERS = {
         'Authorization': f'Bearer {BUBBLE_KEY}',
         'Content-Type': 'application/json'
