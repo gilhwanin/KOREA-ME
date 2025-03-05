@@ -66,8 +66,6 @@ def process_date(input_text):
 
     return always, duedate
 
-
-kakao_api_key = "ceae25b694002a3b0ee820bcd5952654"  # API 키를 문자열로 입력
 def get_lat_lon(address, kakao_api_key):
     url = "https://dapi.kakao.com/v2/local/search/address.json"
 
