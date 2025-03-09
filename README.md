@@ -16,6 +16,7 @@
 - **Python Flask** : API 서버 개발
 - **MySQL** : 채용 데이터 저장 및 관리
 - **Requests** : 외부 API 호출 및 데이터 처리
+- **API** : Google Translation API, 공공포털 API 등의 외부 API를 활용하여 서비스 구현  
 - **XML Parsing (ElementTree)** : OPEN API 응답 데이터 처리
 - **Regex** : 채용 정보 가공 및 데이터 정제
 - **Pyngrok** : 로컬 개발 환경에서 외부 API 호출 테스트 지원
