@@ -1,127 +1,49 @@
-import os, time, random, string, json, requests, pymysql, re, io
+import os
+import json
+import requests
+import pymysql
+import re
 import xml.etree.ElementTree as ET
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify
 from pyngrok import ngrok
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from google.cloud import vision
-import xml.etree.ElementTree as ET
 from datetime import datetime
-
 
 app = Flask(__name__)
 
-
-def get_db_connection():
-    connection = pymysql.connect(host=db_host,
-                                 user=db_user,
-                                 password=db_password,
-                                 database=db_name,
-                                 cursorclass=pymysql.cursors.DictCursor)
-    return connection
-
-#버블 DB 서버 채용 공고 등록
-def bubble_job_post(user_id, job_id, pay_type, pay_min, pay_max, welfare, duedate, always):
-    bubble_param = {
-    'user_id': user_id,
-    'job_id': job_id,
-    'pay_type': pay_type,
-    'pay_min': pay_min,
-    'pay_max': pay_max,
-    'welfare': welfare,
-    'always': always,
-    'duedate': duedate
-    }
-    BUBBLE_HEADERS = {
-        'Authorization': f'Bearer {BUBBLE_KEY}',
-        'Content-Type': 'application/json'
-    }
-    BUBBLE_API_URL = "https://koreaandme.bubbleapps.io/version-test/api/1.1/wf/job_post"
-    response = requests.post(BUBBLE_API_URL, headers=BUBBLE_HEADERS, json = bubble_param)
-
-    return jsonify({"message": "Data updated successfully"})
-
-# Ensure the code runs within the app context
+# ---------------------------
+# 1. 유틸리티 함수
+# ---------------------------
 
 def process_date(input_text):
-    # Initialize variables
+    """ 채용 마감일 날짜 데이터 포맷 가공 / '채용시까지' or 마감일지정 판별 """
     always = '아니오'
     duedate = None
 
-    # Check if the input text contains "채용시까지"
     if "채용시까지" in input_text:
         always = '네'
-        # Extract the date portion
         date_str = input_text.split(" ")[-1]
     else:
         date_str = input_text
 
-    # Parse the date to datetime object
     try:
         date_obj = datetime.strptime(date_str, "%y-%m-%d")
-        # Format the date as "Sep 14, 2024 12:00 pm"
         duedate = date_obj.strftime("%b %d, %Y 12:00 pm")
     except ValueError:
-        raise ValueError("Invalid date format provided. Please use 'yy-mm-dd'.")
+        raise ValueError("Invalid date format. Use 'yy-mm-dd'.")
 
     return always, duedate
 
 def get_lat_lon(address, kakao_api_key):
+    """ 도로명 주소를 Kakao API를 이용해 좌표로 변환 """
     url = "https://dapi.kakao.com/v2/local/search/address.json"
-
-    # Authorization 헤더와 KA 헤더를 함께 설정
-    headers = {
-        "Authorization": f"KakaoAK {kakao_api_key}",
-    }
-
-    params = {"query": address}
-
-    response = requests.get(url, headers=headers, params=params)
+    headers = {"Authorization": f"KakaoAK {kakao_api_key}"}
+    response = requests.get(url, headers=headers, params={"query": address})
 
     if response.status_code == 200:
         data = response.json()
         if data['documents']:
-            lat = data['documents'][0]['y']
-            lon = data['documents'][0]['x']
-            return lat, lon
-        else:
-            return None
-    else:
-        raise Exception(f"Error {response.status_code}: {response.text}")
-
-
-def bubble_job_post(user_id, job_id, pay_type, pay_min, pay_max, welfare, always, duedate):
-    bubble_param = {
-    'user_id': user_id,
-    'job_id': job_id,
-    'welfare': welfare,
-    'pay_type': pay_type,
-    'pay_min': pay_min,
-    'pay_max': pay_max,
-    'always': always,
-    'duedate': duedate
-    }
-    BUBBLE_KEY = "17451d9face39e057919c9f0a13a694e"
-    BUBBLE_HEADERS = {
-        'Authorization': f'Bearer {BUBBLE_KEY}',
-        'Content-Type': 'application/json'
-    }
-    BUBBLE_API_URL = "https://koreaandme.bubbleapps.io/version-test/api/1.1/wf/job_post"
-    try:
-        response = requests.post(BUBBLE_API_URL, headers=BUBBLE_HEADERS, json=bubble_param)
-
-        # Check if the request was successful
-        if response.status_code == 200:
-            print("Success:", response.json())
-        else:
-            print("Error:", response.status_code, response.text)
-
-    except requests.exceptions.RequestException as e:
-        print("Request failed:", e)
-
-    return jsonify({"message": "Data updated successfully"})
-
-
+            return data['documents'][0]['y'], data['documents'][0]['x']
+    return None
 
 def extract_working_hours(input_string):
     # 한국어 시간 형식에서 시간을 추출하기 위한 정규 표현식
@@ -145,9 +67,8 @@ def extract_working_hours(input_string):
 
     return None
 
-
 def split_job_input(job_input):
-    # 마지막 괄호의 위치를 찾음
+    # 채용정보 OPEN API 응답 분석
     last_open_paren = job_input.rfind('(')
     last_close_paren = job_input.rfind(')')
 
@@ -159,8 +80,59 @@ def split_job_input(job_input):
 
     return job_text, job_code
 
+# ---------------------------
+# 2. 데이터베이스 관련 함수
+# ---------------------------
 
-#채용정보 개별 가공 및 번역
+def get_db_connection():
+    """ MySQL 데이터베이스 연결 생성 """
+    return pymysql.connect(
+        host=db_host,
+        user=db_user,
+        password=db_password,
+        database=db_name,
+        cursorclass=pymysql.cursors.DictCursor
+    )
+
+def job_close(job_id):
+    """ 특정 채용 공고를 마감 상태로 업데이트 """
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("UPDATE job SET onoff='no' WHERE id = %s", (job_id,))
+            connection.commit()
+    finally:
+        connection.close()
+
+# ---------------------------
+# 3. Bubble API 연동
+# ---------------------------
+
+def bubble_job_post(user_id, job_id, pay_type, pay_min, pay_max, welfare, always, duedate):
+    """ Bubble.io 채용 공고 등록 API 호출 """
+    url = "https://koreaandme.bubbleapps.io/version-test/api/1.1/wf/job_post"
+    headers = {
+        'Authorization': f'Bearer {BUBBLE_KEY}',
+        'Content-Type': 'application/json'
+    }
+    data = {
+        'user_id': user_id,
+        'job_id': job_id,
+        'pay_type': pay_type,
+        'pay_min': pay_min,
+        'pay_max': pay_max,
+        'welfare': welfare,
+        'always': always,
+        'duedate': duedate
+    }
+    
+    response = requests.post(url, headers=headers, json=data)
+    return jsonify({"message": "Data updated successfully"}) if response.status_code == 200 else jsonify({"message": "Failed to update data"}), response.status_code
+
+# ---------------------------
+# 4. 채용 공고 데이터 가공 작업
+# ---------------------------
+
 def each_post(authNo, item) :
     params_detail = {
       "authKey": worknet_key,
@@ -399,9 +371,11 @@ def each_post(authNo, item) :
         connection.close()
 
 
-
-#당일 외부 채용공고 수집 및 자사 DB 연동
+# ---------------------------
+# 5. Worknet 데이터 수집 및 DB 저장
+# ---------------------------
 @app.route('/worknet_post', methods=['POST']) 
+""" Worknet API에서 채용 공고를 수집하고 DB에 저장 """
 def worknet_post():
     start_page = int(request.form.get('start_page'))
     display_count = int(request.form.get('display_count'))
@@ -443,11 +417,14 @@ def worknet_post():
     return jsonify({"message": "Data updated successfully"}), 200
 
 
-# "채용시 마감" 공고의 채용 상태 점검 및 최신화
+# ---------------------------
+# 6. 채용 상태 점검 및 최신화
+# ---------------------------
+
 @app.route('/check_close', methods=['PATCH'])
+"""채용시 마감" 공고의 채용 상태 점검 및 최신화"""
 def check_close():
     connection = get_db_connection()
-
     try:
         with connection.cursor() as cursor:
             # SQL 쿼리 작성
@@ -487,18 +464,9 @@ def check_close():
     finally:
         connection.close()
 
-def job_close(job_id):
-    connection = get_db_connection()
-
-    try:
-        with connection.cursor() as cursor:
-            sql = "Update job Set onoff='no' Where id = %s"
-            cursor.execute(sql, (job_id))
-            connection.commit()
-
-            return jsonify({"message": "Job off successfully"})
-    finally:
-        connection.close()
+# ---------------------------
+# 7. 서버 실행
+# ---------------------------
 
 if __name__ == "__main__":
     http_tunnel = ngrok.connect(5001, subdomain="koreamedevelop")
